@@ -63,6 +63,7 @@ app.post(
         authHeader, // Legacy/Convenience: Authorization header
         targetFields = [], // OPTIONAL: List of expected fields for Smart Mapping
         fieldMapping = {},
+        bodyTemplate = [], // OPTIONAL: Nested body template for manual body construction
         includeMetadata = true,
         unmappedFieldStrategy = "store_as_json", // "store_as_json", "ignore", "error"
         flattenFieldsMode = false, // Auto-extract .value from OCR fields
@@ -165,7 +166,18 @@ app.post(
         );
       }
 
-      // 4. Add Metadata (if enabled)
+      // 4. Apply Body Template (if provided)
+      // Reconstructs flat records into the nested JSON shape the target API expects.
+      if (bodyTemplate && bodyTemplate.length > 0) {
+        console.log(
+          `[Export] Applying body template with ${bodyTemplate.length} mappings`,
+        );
+        records = records.map((record) =>
+          exportService.buildNestedBody(record, bodyTemplate),
+        );
+      }
+
+      // 5. Add Metadata (if enabled)
       if (includeMetadata) {
         records = records.map((record) => ({
           ...record,

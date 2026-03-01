@@ -18,7 +18,7 @@ function extractRecords(
   inputData,
   fieldMapping,
   unmappedFieldStrategy,
-  options = {}
+  options = {},
 ) {
   const { flattenFieldsMode = false, includeExtractionMetadata = false } =
     options;
@@ -37,7 +37,7 @@ function extractRecords(
       const record = extractSingleRecord(
         result,
         fieldMapping,
-        unmappedFieldStrategy
+        unmappedFieldStrategy,
       );
       records.push({
         ...record,
@@ -57,7 +57,7 @@ function extractRecords(
     const record = extractSingleRecord(
       data,
       fieldMapping,
-      unmappedFieldStrategy
+      unmappedFieldStrategy,
     );
     records.push(record);
   }
@@ -74,7 +74,7 @@ function extractRecords(
       const record = extractSingleRecord(
         data,
         fieldMapping,
-        unmappedFieldStrategy
+        unmappedFieldStrategy,
       );
       records.push(record);
     }
@@ -183,7 +183,7 @@ function extractSingleRecord(data, fieldMapping, unmappedFieldStrategy) {
         break;
       case "error":
         throw new Error(
-          `Unmapped fields found: ${Object.keys(unmappedData).join(", ")}`
+          `Unmapped fields found: ${Object.keys(unmappedData).join(", ")}`,
         );
       case "ignore":
       default:
@@ -236,6 +236,61 @@ function isPrimitive(value) {
 }
 
 /**
+ * Set a value in an object by dot-notation path, creating nested objects as needed.
+ * Supports array notation: e.g. "lineItems[0].description"
+ * @param {Object} obj - The target object to set value in
+ * @param {string} path - Dot-notation path (e.g. "companyInfo.name")
+ * @param {any} value - The value to set
+ */
+function setValueByPath(obj, path, value) {
+  if (!path) return;
+  const parts = path.split(/\.|(?=\[)/).filter(Boolean);
+  let current = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i].replace(/[\[\]]/g, "");
+    const nextPart = parts[i + 1];
+    if (current[part] === undefined || current[part] === null) {
+      // If next segment is an array index, create array; else object
+      current[part] = /^\[\d+\]$/.test(nextPart) ? [] : {};
+    }
+    current = current[part];
+  }
+  const lastPart = parts[parts.length - 1].replace(/[\[\]]/g, "");
+  current[lastPart] = value;
+}
+
+/**
+ * Build a nested API body from a flat record using a bodyTemplate.
+ * Each template entry maps an outputPath to a source OCR field or a static value.
+ *
+ * @param {Record<string, any>} record - Flat OCR record (after flatten/extract)
+ * @param {Array<{outputPath: string, sourceField: string, isStatic: boolean, staticValue: string}>} bodyTemplate
+ * @returns {Record<string, any>} Nested body object ready to send to the target API
+ *
+ * @example
+ * buildNestedBody(
+ *   { companyName: 'Acme', quotationNumber: '#1234' },
+ *   [
+ *     { outputPath: 'companyInfo.name', sourceField: 'companyName', isStatic: false },
+ *     { outputPath: 'companyInfo.logo', isStatic: true, staticValue: 'logo.png' },
+ *     { outputPath: 'quotationDetails.number', sourceField: 'quotationNumber', isStatic: false }
+ *   ]
+ * )
+ * // => { companyInfo: { name: 'Acme', logo: 'logo.png' }, quotationDetails: { number: '#1234' } }
+ */
+function buildNestedBody(record, bodyTemplate) {
+  const body = {};
+  for (const mapping of bodyTemplate) {
+    if (!mapping || !mapping.outputPath) continue;
+    const value = mapping.isStatic
+      ? (mapping.staticValue ?? null)
+      : (record[mapping.sourceField] ?? null);
+    setValueByPath(body, mapping.outputPath, value);
+  }
+  return body;
+}
+
+/**
  * Send records to webhook via webhookService
  * @param {string} url
  * @param {any[]} records
@@ -250,6 +305,8 @@ module.exports = {
   extractRecords,
   extractSingleRecord,
   getValueByPath,
+  setValueByPath,
   flattenOcrFields,
-  sendRecords
+  buildNestedBody,
+  sendRecords,
 };
