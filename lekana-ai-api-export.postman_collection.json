@@ -1,0 +1,319 @@
+ai{
+  "info": {
+    "name": "Lekana AI - API Export Service",
+    "description": "Export microservice (v2.1.0-webhook-flexible) for Lekana AI workflows.\nSends workflow OCR/extraction data to external APIs or webhooks.\nPort: 4005\n\n--- Config Options ---\n- targetApiUrl (required): The external API endpoint to POST records to\n- targetMethod: HTTP method (POST, PUT, PATCH) – default POST\n- headers: Custom headers object\n- authHeader: Convenience Authorization header value\n- targetFields: Field names expected by the target API (enables Smart Mapping)\n- fieldMapping: Manual source→target field mapping (object or array)\n- includeMetadata: Attach _execution_id, _workflow_id, _created_at\n- unmappedFieldStrategy: 'store_as_json' | 'ignore' | 'error'\n- flattenFieldsMode: Auto-extract .value from OCR result fields\n- includeExtractionMetadata: Store OCR confidence / corrected data\n- useSmartMapping: Use Gemini AI to auto-map fields to targetFields",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4005",
+      "type": "string",
+      "description": "Base URL of the export service. Change to your deployed Cloud Run URL in production."
+    },
+    {
+      "key": "targetWebhookUrl",
+      "value": "https://webhook.site/your-unique-id",
+      "type": "string",
+      "description": "A test webhook URL (e.g. webhook.site) to inspect forwarded records."
+    },
+    {
+      "key": "clerkToken",
+      "value": "YOUR_CLERK_JWT_TOKEN",
+      "type": "string",
+      "description": "Clerk JWT token for authenticated requests (if checkJwt is enabled in production)."
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        },
+        "description": "Public health-check endpoint. Returns service status and version. No auth required."
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "status": "OK",
+          "code": 200,
+          "originalRequest": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/health" }
+          },
+          "body": "{\n  \"status\": \"ok\",\n  \"service\": \"lekana-export-service\",\n  \"version\": \"2.1.0-webhook-flexible\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Process - Basic Webhook Export (OCR Documents)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "options": { "raw": { "language": "json" } },
+          "raw": "{\n  \"executionId\": \"exec-001\",\n  \"nodeId\": \"api-export-node-1\",\n  \"workflowId\": \"workflow-100\",\n  \"userId\": \"user-abc\",\n  \"input\": {\n    \"data\": {\n      \"documents\": [\n        {\n          \"filename\": \"invoice1.pdf\",\n          \"result\": {\n            \"invoice_number\": \"INV-001\",\n            \"vendor\": \"Acme Corp\",\n            \"total\": 1500.00,\n            \"date\": \"2025-01-15\"\n          }\n        },\n        {\n          \"filename\": \"invoice2.pdf\",\n          \"result\": {\n            \"invoice_number\": \"INV-002\",\n            \"vendor\": \"Beta Inc\",\n            \"total\": 2750.50,\n            \"date\": \"2025-01-16\"\n          }\n        }\n      ]\n    }\n  },\n  \"config\": {\n    \"targetApiUrl\": \"{{targetWebhookUrl}}\",\n    \"targetMethod\": \"POST\",\n    \"headers\": {\n      \"X-Source\": \"lekana-export\"\n    },\n    \"includeMetadata\": true,\n    \"unmappedFieldStrategy\": \"store_as_json\",\n    \"useSmartMapping\": false\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/process",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "process"]
+        },
+        "description": "Sends OCR document results to an external webhook or API.\nNo smart mapping, no field targeting – raw records are forwarded as-is.\nMetadata (_execution_id, _workflow_id, _created_at) is appended to each record."
+      },
+      "response": [
+        {
+          "name": "200 Success",
+          "status": "OK",
+          "code": 200,
+          "originalRequest": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/v1/process" }
+          },
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"recordsProcessed\": 2,\n    \"recordsSent\": 2,\n    \"targetApiUrl\": \"https://webhook.site/your-unique-id\",\n    \"fieldMappingApplied\": null\n  },\n  \"metadata\": {\n    \"processingTime\": 312,\n    \"serviceVersion\": \"2.1.0-webhook-flexible\",\n    \"tokensUsed\": 0\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "Process - Smart Mapping with Gemini AI",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "options": { "raw": { "language": "json" } },
+          "raw": "{\n  \"executionId\": \"exec-002\",\n  \"nodeId\": \"api-export-node-2\",\n  \"workflowId\": \"workflow-100\",\n  \"userId\": \"user-abc\",\n  \"input\": {\n    \"data\": {\n      \"documents\": [\n        {\n          \"filename\": \"expense_report.pdf\",\n          \"result\": {\n            \"invoice_number\": \"EXP-001\",\n            \"vendor_name\": \"OfficeSupplies Ltd\",\n            \"total_amount\": 350.75,\n            \"transaction_date\": \"2025-02-01\",\n            \"department\": \"Engineering\"\n          }\n        }\n      ]\n    }\n  },\n  \"config\": {\n    \"targetApiUrl\": \"{{targetWebhookUrl}}\",\n    \"targetMethod\": \"POST\",\n    \"targetFields\": [\"inv_id\", \"vendor\", \"amount\", \"date\", \"dept\"],\n    \"includeMetadata\": true,\n    \"unmappedFieldStrategy\": \"store_as_json\",\n    \"useSmartMapping\": true,\n    \"flattenFieldsMode\": false,\n    \"includeExtractionMetadata\": false\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/process",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "process"]
+        },
+        "description": "Uses Gemini AI to automatically map OCR-extracted field names to the target API's expected field names (targetFields).\nThe mapping result (e.g. invoice_number → inv_id) is included in the response under fieldMappingApplied.\nRequires GEMINI_API_KEY in .env."
+      },
+      "response": [
+        {
+          "name": "200 Success with Smart Mapping",
+          "status": "OK",
+          "code": 200,
+          "originalRequest": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/v1/process" }
+          },
+          "body": "{\n  \"success\": true,\n  \"data\": {\n    \"recordsProcessed\": 1,\n    \"recordsSent\": 1,\n    \"targetApiUrl\": \"https://webhook.site/your-unique-id\",\n    \"fieldMappingApplied\": {\n      \"invoice_number\": \"inv_id\",\n      \"vendor_name\": \"vendor\",\n      \"total_amount\": \"amount\",\n      \"transaction_date\": \"date\",\n      \"department\": \"dept\"\n    }\n  },\n  \"metadata\": {\n    \"processingTime\": 1850,\n    \"serviceVersion\": \"2.1.0-webhook-flexible\",\n    \"tokensUsed\": 420\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "Process - Manual Field Mapping (Object Format)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "options": { "raw": { "language": "json" } },
+          "raw": "{\n  \"executionId\": \"exec-003\",\n  \"nodeId\": \"api-export-node-3\",\n  \"workflowId\": \"workflow-200\",\n  \"userId\": \"user-abc\",\n  \"input\": {\n    \"data\": {\n      \"documents\": [\n        {\n          \"filename\": \"contract.pdf\",\n          \"result\": {\n            \"client_name\": \"John Doe\",\n            \"contract_value\": 50000,\n            \"start_date\": \"2025-03-01\",\n            \"end_date\": \"2026-03-01\"\n          }\n        }\n      ]\n    }\n  },\n  \"config\": {\n    \"targetApiUrl\": \"{{targetWebhookUrl}}\",\n    \"targetMethod\": \"POST\",\n    \"fieldMapping\": {\n      \"name\": \"client_name\",\n      \"value\": \"contract_value\",\n      \"from\": \"start_date\",\n      \"to\": \"end_date\"\n    },\n    \"includeMetadata\": true,\n    \"unmappedFieldStrategy\": \"ignore\",\n    \"useSmartMapping\": false\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/process",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "process"]
+        },
+        "description": "Uses a manually defined fieldMapping object to rename fields before forwarding.\nFormat: { \"targetField\": \"sourceField\" }\nSmartMapping is disabled. unmappedFieldStrategy is 'ignore' so extra fields are dropped."
+      },
+      "response": []
+    },
+    {
+      "name": "Process - Manual Field Mapping (Array Format)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "options": { "raw": { "language": "json" } },
+          "raw": "{\n  \"executionId\": \"exec-004\",\n  \"nodeId\": \"api-export-node-4\",\n  \"workflowId\": \"workflow-200\",\n  \"userId\": \"user-abc\",\n  \"input\": {\n    \"data\": {\n      \"documents\": [\n        {\n          \"filename\": \"receipt.pdf\",\n          \"result\": {\n            \"merchant\": \"Supermart\",\n            \"total_paid\": 89.99,\n            \"payment_method\": \"credit_card\"\n          }\n        }\n      ]\n    }\n  },\n  \"config\": {\n    \"targetApiUrl\": \"{{targetWebhookUrl}}\",\n    \"targetMethod\": \"POST\",\n    \"fieldMapping\": [\n      { \"key\": \"store\", \"value\": \"merchant\" },\n      { \"key\": \"amount\", \"value\": \"total_paid\" },\n      { \"key\": \"pay_method\", \"value\": \"payment_method\" }\n    ],\n    \"includeMetadata\": false,\n    \"unmappedFieldStrategy\": \"store_as_json\",\n    \"useSmartMapping\": false\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/process",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "process"]
+        },
+        "description": "Uses fieldMapping in array format: [{ key: \"targetField\", value: \"sourceField\" }]\nThis is the alternative format supported by the service alongside the plain object format.\nMetadata is disabled (includeMetadata: false)."
+      },
+      "response": []
+    },
+    {
+      "name": "Process - PUT to External REST API",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "options": { "raw": { "language": "json" } },
+          "raw": "{\n  \"executionId\": \"exec-005\",\n  \"nodeId\": \"api-export-node-5\",\n  \"workflowId\": \"workflow-300\",\n  \"userId\": \"user-abc\",\n  \"input\": {\n    \"data\": {\n      \"documents\": [\n        {\n          \"filename\": \"employee.pdf\",\n          \"result\": {\n            \"employee_id\": \"EMP-042\",\n            \"name\": \"Jane Smith\",\n            \"department\": \"Finance\",\n            \"salary\": 75000\n          }\n        }\n      ]\n    }\n  },\n  \"config\": {\n    \"targetApiUrl\": \"https://api.yourcompany.com/employees\",\n    \"targetMethod\": \"PUT\",\n    \"headers\": {\n      \"Content-Type\": \"application/json\",\n      \"X-Api-Key\": \"your-api-key-here\"\n    },\n    \"authHeader\": \"Bearer eyJhbGciOiJSUzI1NiJ9...\",\n    \"includeMetadata\": true,\n    \"unmappedFieldStrategy\": \"store_as_json\",\n    \"useSmartMapping\": false\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/process",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "process"]
+        },
+        "description": "Forwards extracted records to an external REST API using HTTP PUT.\nDemonstrates use of custom headers and authHeader (convenience Authorization header).\nChange targetApiUrl to your actual endpoint."
+      },
+      "response": []
+    },
+    {
+      "name": "Process - Flatten OCR Fields Mode",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "options": { "raw": { "language": "json" } },
+          "raw": "{\n  \"executionId\": \"exec-006\",\n  \"nodeId\": \"api-export-node-6\",\n  \"workflowId\": \"workflow-400\",\n  \"userId\": \"user-abc\",\n  \"input\": {\n    \"data\": {\n      \"documents\": [\n        {\n          \"filename\": \"form_w2.pdf\",\n          \"result\": {\n            \"employer_name\": { \"value\": \"Acme Corp\", \"confidence\": 0.98 },\n            \"wages\": { \"value\": 85000, \"confidence\": 0.95, \"corrected\": false },\n            \"federal_tax\": { \"value\": 12000, \"confidence\": 0.92 }\n          }\n        }\n      ]\n    }\n  },\n  \"config\": {\n    \"targetApiUrl\": \"{{targetWebhookUrl}}\",\n    \"targetMethod\": \"POST\",\n    \"includeMetadata\": true,\n    \"unmappedFieldStrategy\": \"store_as_json\",\n    \"flattenFieldsMode\": true,\n    \"includeExtractionMetadata\": false,\n    \"useSmartMapping\": false\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/process",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "process"]
+        },
+        "description": "When OCR fields contain objects with { value, confidence } structure,\nflattenFieldsMode:true automatically extracts just the .value,\nso the target API receives clean scalar values instead of nested objects.\nincludeExtractionMetadata stores confidence/corrected data alongside the record."
+      },
+      "response": []
+    },
+    {
+      "name": "Process - No Metadata, Error on Unmapped Fields",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "options": { "raw": { "language": "json" } },
+          "raw": "{\n  \"executionId\": \"exec-007\",\n  \"nodeId\": \"api-export-node-7\",\n  \"workflowId\": \"workflow-500\",\n  \"userId\": \"user-abc\",\n  \"input\": {\n    \"data\": {\n      \"documents\": [\n        {\n          \"filename\": \"strict_form.pdf\",\n          \"result\": {\n            \"first_name\": \"Alice\",\n            \"last_name\": \"Wonder\",\n            \"account_number\": \"ACC-9901\"\n          }\n        }\n      ]\n    }\n  },\n  \"config\": {\n    \"targetApiUrl\": \"{{targetWebhookUrl}}\",\n    \"targetMethod\": \"POST\",\n    \"fieldMapping\": {\n      \"fname\": \"first_name\",\n      \"lname\": \"last_name\"\n    },\n    \"includeMetadata\": false,\n    \"unmappedFieldStrategy\": \"error\",\n    \"useSmartMapping\": false\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/process",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "process"]
+        },
+        "description": "Strict mode: unmappedFieldStrategy is 'error'.\nIf any field in the data is not covered by fieldMapping, the service returns a 400 error instead of forwarding.\nUseful when the target API has a strict schema."
+      },
+      "response": [
+        {
+          "name": "400 Unmapped Field Error",
+          "status": "Bad Request",
+          "code": 400,
+          "originalRequest": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/v1/process" }
+          },
+          "body": "{\n  \"success\": false,\n  \"error\": {\n    \"code\": \"EXPORT_ERROR\",\n    \"message\": \"Unmapped field 'account_number' found and strategy is 'error'\"\n  },\n  \"metadata\": {\n    \"processingTime\": 45,\n    \"serviceVersion\": \"2.1.0-webhook-flexible\"\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "Process - Simple Flat Object Input",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "options": { "raw": { "language": "json" } },
+          "raw": "{\n  \"executionId\": \"exec-008\",\n  \"nodeId\": \"api-export-node-8\",\n  \"workflowId\": \"workflow-600\",\n  \"userId\": \"user-abc\",\n  \"input\": {\n    \"data\": {\n      \"customer_id\": \"CUST-001\",\n      \"email\": \"customer@example.com\",\n      \"plan\": \"premium\",\n      \"signup_date\": \"2025-01-01\"\n    }\n  },\n  \"config\": {\n    \"targetApiUrl\": \"{{targetWebhookUrl}}\",\n    \"targetMethod\": \"POST\",\n    \"includeMetadata\": false,\n    \"unmappedFieldStrategy\": \"store_as_json\",\n    \"useSmartMapping\": false\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/process",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "process"]
+        },
+        "description": "Input is a plain flat object (not wrapped in a documents array).\nThe service handles both structures: input.data.documents[] and input.data as a plain object."
+      },
+      "response": []
+    },
+    {
+      "name": "Process - Missing targetApiUrl (Error Case)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "options": { "raw": { "language": "json" } },
+          "raw": "{\n  \"executionId\": \"exec-err-1\",\n  \"nodeId\": \"api-export-node-err\",\n  \"workflowId\": \"workflow-999\",\n  \"userId\": \"user-abc\",\n  \"input\": {\n    \"data\": {\n      \"documents\": [\n        { \"filename\": \"test.pdf\", \"result\": { \"field1\": \"value1\" } }\n      ]\n    }\n  },\n  \"config\": {\n    \"includeMetadata\": true\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/process",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "process"]
+        },
+        "description": "Error case: config.targetApiUrl is missing.\nExpects a 400 EXPORT_ERROR response with message 'targetApiUrl is required in config'."
+      },
+      "response": [
+        {
+          "name": "400 Missing targetApiUrl",
+          "status": "Bad Request",
+          "code": 400,
+          "originalRequest": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/v1/process" }
+          },
+          "body": "{\n  \"success\": false,\n  \"error\": {\n    \"code\": \"EXPORT_ERROR\",\n    \"message\": \"targetApiUrl is required in config\"\n  },\n  \"metadata\": {\n    \"processingTime\": 12,\n    \"serviceVersion\": \"2.1.0-webhook-flexible\"\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "Process - Empty Input Data (Error Case)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "options": { "raw": { "language": "json" } },
+          "raw": "{\n  \"executionId\": \"exec-err-2\",\n  \"nodeId\": \"api-export-node-err\",\n  \"workflowId\": \"workflow-999\",\n  \"userId\": \"user-abc\",\n  \"input\": {\n    \"data\": {}\n  },\n  \"config\": {\n    \"targetApiUrl\": \"{{targetWebhookUrl}}\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/process",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "process"]
+        },
+        "description": "Error case: input.data is an empty object.\nExpects a 400 EXPORT_ERROR with message 'No data provided in input'."
+      },
+      "response": [
+        {
+          "name": "400 No Data",
+          "status": "Bad Request",
+          "code": 400,
+          "originalRequest": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/v1/process" }
+          },
+          "body": "{\n  \"success\": false,\n  \"error\": {\n    \"code\": \"EXPORT_ERROR\",\n    \"message\": \"No data provided in input\"\n  },\n  \"metadata\": {\n    \"processingTime\": 8,\n    \"serviceVersion\": \"2.1.0-webhook-flexible\"\n  }\n}"
+        }
+      ]
+    }
+  ]
+}

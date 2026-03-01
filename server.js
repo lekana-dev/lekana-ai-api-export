@@ -57,11 +57,11 @@ app.post(
 
       // Extract config
       const {
-        targetApiUrl,        // REPLACES databaseUrl
+        targetApiUrl, // REPLACES databaseUrl
         targetMethod = "POST", // HTTP Method (POST, PUT, PATCH, etc.)
-        headers = {},          // Custom headers object
-        authHeader,          // Legacy/Convenience: Authorization header
-        targetFields = [],   // OPTIONAL: List of expected fields for Smart Mapping
+        headers = {}, // Custom headers object
+        authHeader, // Legacy/Convenience: Authorization header
+        targetFields = [], // OPTIONAL: List of expected fields for Smart Mapping
         fieldMapping = {},
         includeMetadata = true,
         unmappedFieldStrategy = "store_as_json", // "store_as_json", "ignore", "error"
@@ -83,7 +83,9 @@ app.post(
       console.log(`  - custom headers: ${Object.keys(headers).join(", ")}`);
       console.log(`  - includeMetadata: ${includeMetadata}`);
       console.log(`  - smartMapping: ${useSmartMapping}`);
-      console.log(`  - targetFields count: ${targetFields ? targetFields.length : 0}`);
+      console.log(
+        `  - targetFields count: ${targetFields ? targetFields.length : 0}`,
+      );
 
       // Validate required config
       if (!targetApiUrl) {
@@ -102,18 +104,19 @@ app.post(
         normalizedFieldMapping = {};
         for (const item of fieldMapping) {
           if (!item || typeof item !== "object") continue;
-          normalizedFieldMapping[item.key || item.columnName] = item.value || item.fieldPath;
+          normalizedFieldMapping[item.key || item.columnName] =
+            item.value || item.fieldPath;
         }
       }
 
       // 2. Extract records
-      // Note: We don't have "inferredSchema" returning useful SQL types anymore, 
+      // Note: We don't have "inferredSchema" returning useful SQL types anymore,
       // but we still get a list of records.
       let records = exportService.extractRecords(
         inputData,
         normalizedFieldMapping,
         unmappedFieldStrategy,
-        { flattenFieldsMode, includeExtractionMetadata }
+        { flattenFieldsMode, includeExtractionMetadata },
       );
 
       console.log(`[Export] EXTRACTED ${records.length} records`);
@@ -122,7 +125,12 @@ app.post(
       // Only runs if useSmartMapping is true AND user provided targetFields
       let fieldMappingApplied = null;
 
-      if (useSmartMapping && records.length > 0 && targetFields && targetFields.length > 0) {
+      if (
+        useSmartMapping &&
+        records.length > 0 &&
+        targetFields &&
+        targetFields.length > 0
+      ) {
         // Get incoming field names from first record
         const incomingFields = Object.keys(records[0]).filter(
           (f) => !f.startsWith("_"),
@@ -133,7 +141,7 @@ app.post(
         // Use Gemini
         const mappingResult = await geminiService.mapFieldsToColumns(
           incomingFields,
-          targetFields
+          targetFields,
         );
 
         if (mappingResult.tokensUsed) {
@@ -148,8 +156,13 @@ app.post(
           fieldMappingApplied = mappingResult.mapping;
           console.log(`[Export] Applied smart field mapping`);
         }
-      } else if (useSmartMapping && (!targetFields || targetFields.length === 0)) {
-        console.log("[Export] Smart Mapping requested but skipped: No 'targetFields' provided in config.");
+      } else if (
+        useSmartMapping &&
+        (!targetFields || targetFields.length === 0)
+      ) {
+        console.log(
+          "[Export] Smart Mapping requested but skipped: No 'targetFields' provided in config.",
+        );
       }
 
       // 4. Add Metadata (if enabled)
@@ -169,11 +182,15 @@ app.post(
         finalHeaders["Authorization"] = authHeader;
       }
 
-      const sendResult = await exportService.sendRecords(targetApiUrl, records, {
-        method: targetMethod,
-        headers: finalHeaders,
-        metadata: { executionId, workflowId }
-      });
+      const sendResult = await exportService.sendRecords(
+        targetApiUrl,
+        records,
+        {
+          method: targetMethod,
+          headers: finalHeaders,
+          metadata: { executionId, workflowId },
+        },
+      );
 
       const processingTime = Date.now() - startTime;
 
@@ -192,7 +209,6 @@ app.post(
           tokensUsed: geminiTokensUsed ? geminiTokensUsed.totalTokens : 0,
         },
       });
-
     } catch (error) {
       const processingTime = Date.now() - startTime;
       console.error(`[Export] Error:`, error.message);
