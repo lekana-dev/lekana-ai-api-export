@@ -69,6 +69,7 @@ app.post(
         flattenFieldsMode = false, // Auto-extract .value from OCR fields
         includeExtractionMetadata = false, // Store confidence/corrected data
         useSmartMapping = true, // Use Gemini to map fields
+        sendAsArray = false, // If true, wraps payload in { records, metadata } envelope. Default false: sends the record object directly.
       } = config;
 
       // Track Gemini token usage
@@ -205,6 +206,7 @@ app.post(
           method: targetMethod,
           headers: finalHeaders,
           metadata: { executionId, workflowId },
+          sendAsArray,
         },
       );
 

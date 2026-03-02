@@ -12,23 +12,39 @@ const axios = require("axios");
  * @param {string} [options.method] - HTTP Method (POST, PUT, PATCH, etc.)
  * @param {object} [options.headers] - Custom headers
  * @param {object} [options.metadata] - Additional metadata to send
+ * @param {boolean} [options.sendAsArray] - If true, wraps records in { records, metadata } envelope.
+ *   If false (default), sends records[0] directly as the request body (for APIs that expect a plain object).
  * @returns {Promise<object>} Response summary
  */
 async function sendData(url, records, options = {}) {
-  const { method = "POST", headers = {}, metadata = {} } = options;
+  const {
+    method = "POST",
+    headers = {},
+    metadata = {},
+    sendAsArray = false,
+  } = options;
 
   console.log(
     `[Webhook] Sending ${records.length} records to ${url} via ${method}`,
   );
 
-  const payload = {
-    records: records,
-    metadata: {
-      ...metadata,
-      exportedAt: new Date().toISOString(),
-      recordCount: records.length,
-    },
-  };
+  // When sendAsArray is false (default), send the first record directly as the body.
+  // This is what most external APIs (e.g. swa-api /send-quotation) expect — a plain object, not a wrapped array.
+  // When sendAsArray is true, use the legacy { records, metadata } envelope.
+  let payload;
+  if (sendAsArray) {
+    payload = {
+      records: records,
+      metadata: {
+        ...metadata,
+        exportedAt: new Date().toISOString(),
+        recordCount: records.length,
+      },
+    };
+  } else {
+    // Send the first (and typically only) record directly as the body object
+    payload = records.length === 1 ? records[0] : records;
+  }
 
   // Merge default headers with user-provided headers
   const requestHeaders = {
