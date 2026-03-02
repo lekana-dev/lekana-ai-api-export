@@ -29,8 +29,24 @@ function extractRecords(
     for (const doc of inputData.documents) {
       let result = doc.result || {};
 
-      // If flattenFieldsMode is enabled and we have a fields object, flatten it
-      if (flattenFieldsMode && result.fields) {
+      // If the result has a Gemini-extracted `fields` object (field-extract mode),
+      // unwrap { fieldName: { value, confidence } } → { fieldName: value }
+      // This is what happens after OCR + Gemini field-extract refinement.
+      if (
+        result.fields &&
+        typeof result.fields === "object" &&
+        !Array.isArray(result.fields)
+      ) {
+        const unwrapped = {};
+        for (const [key, fieldObj] of Object.entries(result.fields)) {
+          unwrapped[key] =
+            fieldObj && typeof fieldObj === "object" && "value" in fieldObj
+              ? fieldObj.value
+              : fieldObj;
+        }
+        result = unwrapped;
+      } else if (flattenFieldsMode && result.fields) {
+        // Legacy flattenFieldsMode path
         result = flattenOcrFields(result, includeExtractionMetadata);
       }
 
