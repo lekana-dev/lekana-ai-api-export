@@ -194,6 +194,10 @@ app.post(
         finalHeaders["Authorization"] = authHeader;
       }
 
+      // Log the final payload being sent
+      console.log("[Export] OUTPUT PAYLOAD TO API:");
+      console.log(JSON.stringify(records, null, 2));
+
       const sendResult = await exportService.sendRecords(
         targetApiUrl,
         records,
@@ -214,6 +218,7 @@ app.post(
           recordsSent: sendResult.recordsSent,
           targetApiUrl,
           fieldMappingApplied,
+          outputPayload: records,
         },
         metadata: {
           processingTime,
