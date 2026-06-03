@@ -3,6 +3,7 @@
  * Handles intelligent field-to-column mapping using LLM
  */
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const geminiModelName = process.env.GEMINI_MODEL || "gemini-3-flash-preview";
 
 // Check for API key at startup
 if (!process.env.GEMINI_API_KEY) {
@@ -16,7 +17,7 @@ const genAI = process.env.GEMINI_API_KEY
   ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
   : null;
 const model = genAI
-  ? genAI.getGenerativeModel({ model: "gemini-3-flash-preview" })
+  ? genAI.getGenerativeModel({ model: geminiModelName })
   : null;
 
 /**
